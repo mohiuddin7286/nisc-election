@@ -48,6 +48,11 @@ export default function AdminDashboard() {
   const [editNote, setEditNote] = useState("");
   const [editMsg, setEditMsg] = useState<string | null>(null);
 
+  // Candidate Vote Reset
+  const [resetCandId, setResetCandId] = useState<string | null>(null);
+  const [resetReason, setResetReason] = useState("");
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+
   const refreshData = useCallback(() => {
     setState(getElectionState());
     setCandidates(getCandidates());
@@ -87,11 +92,6 @@ export default function AdminDashboard() {
     );
     refreshData();
   };
-
-  // Candidate Vote Reset
-  const [resetCandId, setResetCandId] = useState<string | null>(null);
-  const [resetReason, setResetReason] = useState("");
-  const [resetMsg, setResetMsg] = useState<string | null>(null);
 
   const handleResetCandidateVotesAction = (candidateId: string) => {
     if (!resetReason.trim()) {
