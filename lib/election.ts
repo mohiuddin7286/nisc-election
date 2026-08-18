@@ -214,62 +214,68 @@ export function adminEditVote(
   return { success: true, message: "Vote has been updated successfully." };
 }
 
-// ── Admin: Reset Candidate Votes ──
+// ── Admin: Reset Voter's Vote ──
 
-export function adminResetCandidateVotes(
-  candidateId: string,
+export function adminResetVoterVote(
+  voterRoll: string,
   reason: string
 ): { success: boolean; message: string } {
   if (typeof window === "undefined") return { success: false, message: "Server-side not supported." };
 
-  const candidates = getCandidates();
-  const candIdx = candidates.findIndex((c) => c.id === candidateId);
-  if (candIdx === -1) {
-    return { success: false, message: "Candidate not found." };
+  const voters = getStoredVotersList();
+  const voterIdx = voters.findIndex((v) => v.rollNumber === voterRoll);
+
+  if (voterIdx === -1) {
+    return { success: false, message: "Voter not found." };
   }
 
-  const candidateName = candidates[candIdx].name;
-  const removedVotesCount = candidates[candIdx].voteCount;
+  const voter = voters[voterIdx];
+  if (!voter.hasVoted) {
+    return { success: false, message: "This voter has not cast a vote yet." };
+  }
 
-  // Reset candidate vote count to 0
-  candidates[candIdx].voteCount = 0;
-  saveCandidates(candidates);
-
-  // Remove candidate selections from vote records and update voters
+  // Find their vote record
   const votes = getVoteRecords();
-  const voters = getStoredVotersList();
+  const voteIdx = votes.findIndex((v) => v.voterRoll === voterRoll);
 
-  const updatedVotes = votes.filter((record) => {
-    const selectedThisCandidate = Object.values(record.selections).includes(candidateId);
-    if (selectedThisCandidate) {
-      // Reset voter's status so they can revote
-      const voterIdx = voters.findIndex((v) => v.rollNumber === record.voterRoll);
-      if (voterIdx !== -1) {
-        voters[voterIdx].hasVoted = false;
-        delete voters[voterIdx].voteReceiptId;
-        delete voters[voterIdx].voteTimestamp;
+  if (voteIdx !== -1) {
+    const ballot = votes[voteIdx];
+    // Decrement candidate vote counts
+    const candidates = getCandidates();
+    for (const [, candId] of Object.entries(ballot.selections)) {
+      const cIdx = candidates.findIndex((c) => c.id === candId);
+      if (cIdx !== -1) {
+        candidates[cIdx].voteCount = Math.max(0, candidates[cIdx].voteCount - 1);
       }
-      return false; // Remove this ballot
     }
-    return true;
-  });
+    saveCandidates(candidates);
 
-  localStorage.setItem("nisc_votes", JSON.stringify(updatedVotes));
+    // Remove vote record
+    votes.splice(voteIdx, 1);
+    localStorage.setItem(VOTES_KEY, JSON.stringify(votes));
+  }
+
+  // Reset voter status
+  voters[voterIdx].hasVoted = false;
+  delete voters[voterIdx].voteReceiptId;
+  delete voters[voterIdx].voteTimestamp;
   saveStoredVotersList(voters);
 
-  // Update total votes cast
-  updateElectionState({ totalVotesCast: updatedVotes.length });
+  // Update total votes cast count
+  const state = getElectionState();
+  updateElectionState({ totalVotesCast: Math.max(0, state.totalVotesCast - 1) });
 
   // Audit log
   addAuditLog(
-    "Candidate Votes Reset (Admin)",
-    `Admin reset all ${removedVotesCount} votes for ${candidateName} (${candidateId}). Reason: ${reason}`,
+    "Voter Vote Reset (Admin)",
+    `Admin reset vote for member ${voter.name} (${voterRoll}). Reason: ${reason}`,
     "EDIT"
   );
 
   return {
     success: true,
-    message: `Successfully reset votes for ${candidateName}. ${removedVotesCount} vote(s) removed.`,
+    message: `Vote for ${voter.name} (${voterRoll}) has been successfully reset.`,
   };
 }
+
 

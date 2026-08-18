@@ -10,7 +10,7 @@ import {
   getAuditLogs,
   getVoteRecords,
   adminEditVote,
-  adminResetCandidateVotes,
+  adminResetVoterVote,
   addAuditLog,
 } from "@/lib/election";
 import { ElectionState, AuditLog, Candidate, Position, Voter, VoteRecord } from "@/types/election";
@@ -48,10 +48,10 @@ export default function AdminDashboard() {
   const [editNote, setEditNote] = useState("");
   const [editMsg, setEditMsg] = useState<string | null>(null);
 
-  // Candidate Vote Reset
-  const [resetCandId, setResetCandId] = useState<string | null>(null);
-  const [resetReason, setResetReason] = useState("");
-  const [resetMsg, setResetMsg] = useState<string | null>(null);
+  // Voter Vote Reset
+  const [resetVoterRoll, setResetVoterRoll] = useState<string | null>(null);
+  const [resetVoterReason, setResetVoterReason] = useState("");
+  const [resetVoterMsg, setResetVoterMsg] = useState<string | null>(null);
 
   const refreshData = useCallback(() => {
     setState(getElectionState());
@@ -93,17 +93,21 @@ export default function AdminDashboard() {
     refreshData();
   };
 
-  const handleResetCandidateVotesAction = (candidateId: string) => {
-    if (!resetReason.trim()) {
-      setResetMsg("Please provide a reason before resetting candidate votes.");
+  const handleResetVoterVoteAction = (voterRoll: string) => {
+    if (!resetVoterReason.trim()) {
+      setResetVoterMsg("Please provide a reason before resetting this member's vote.");
       return;
     }
-    const result = adminResetCandidateVotes(candidateId, resetReason);
-    setResetMsg(result.message);
+    const result = adminResetVoterVote(voterRoll, resetVoterReason);
+    setResetVoterMsg(result.message);
     if (result.success) {
       refreshData();
-      setResetCandId(null);
-      setResetReason("");
+      setResetVoterRoll(null);
+      setResetVoterReason("");
+      if (foundVoter && foundVoter.rollNumber === voterRoll) {
+        setFoundVoter({ ...foundVoter, hasVoted: false });
+        setFoundVote(null);
+      }
     }
   };
 
@@ -255,90 +259,30 @@ export default function AdminDashboard() {
         <h2 className="font-heading font-bold text-lg text-nisc-navy mb-4 flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-nisc-orange" /> Current Vote Counts
         </h2>
-
-        {resetMsg && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 mb-4">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-700">{resetMsg}</p>
-          </div>
-        )}
-
-        <div className="space-y-4">
+        <div className="space-y-3">
           {candidates.map((c) => (
-            <div key={c.id} className="p-3 rounded-xl bg-nisc-gray-light/40 border border-nisc-border/40 space-y-2">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
-                  style={{ backgroundColor: c.colorLight }}
-                >
-                  {c.icon}
+            <div key={c.id} className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
+                style={{ backgroundColor: c.colorLight }}
+              >
+                {c.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-semibold text-nisc-navy text-sm">{c.name} ({c.codename})</span>
+                  <span className="text-sm font-bold text-nisc-navy">{c.voteCount}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-semibold text-nisc-navy text-sm">{c.name} ({c.codename})</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-nisc-navy">{c.voteCount} votes</span>
-                      <button
-                        onClick={() => {
-                          setResetMsg(null);
-                          setResetCandId(resetCandId === c.id ? null : c.id);
-                          setResetReason("");
-                        }}
-                        className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all"
-                        title="Reset candidate votes"
-                      >
-                        <RotateCcw className="w-3 h-3" /> Reset
-                      </button>
-                    </div>
-                  </div>
-                  <div className="w-full bg-nisc-gray-light rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full transition-all"
-                      style={{
-                        width: votedCount > 0 ? `${(c.voteCount / votedCount) * 100}%` : "0%",
-                        backgroundColor: c.color,
-                      }}
-                    />
-                  </div>
+                <div className="w-full bg-nisc-gray-light rounded-full h-2">
+                  <div
+                    className="h-2 rounded-full transition-all"
+                    style={{
+                      width: votedCount > 0 ? `${(c.voteCount / votedCount) * 100}%` : "0%",
+                      backgroundColor: c.color,
+                    }}
+                  />
                 </div>
               </div>
-
-              {/* Reset Reason Form */}
-              {resetCandId === c.id && (
-                <div className="mt-3 p-3 bg-red-50/70 border border-red-200 rounded-xl space-y-2">
-                  <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    Reset all votes for {c.name}?
-                  </p>
-                  <p className="text-xs text-nisc-gray">
-                    This will set {c.name}&apos;s vote count to 0 and remove associated ballots.
-                  </p>
-                  <input
-                    type="text"
-                    value={resetReason}
-                    onChange={(e) => setResetReason(e.target.value)}
-                    placeholder="Enter reason for reset (required)..."
-                    className="w-full px-3 py-1.5 rounded-lg border border-red-200 bg-white text-xs text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-red-400"
-                  />
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      onClick={() => handleResetCandidateVotesAction(c.id)}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-all"
-                    >
-                      Confirm Reset
-                    </button>
-                    <button
-                      onClick={() => {
-                        setResetCandId(null);
-                        setResetReason("");
-                      }}
-                      className="px-3 py-1 bg-white border border-nisc-border text-nisc-navy rounded-lg text-xs font-medium hover:bg-nisc-gray-light transition-all"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -502,6 +446,14 @@ export default function AdminDashboard() {
         <h2 className="font-heading font-bold text-lg text-nisc-navy mb-4 flex items-center gap-2">
           <Users className="w-5 h-5 text-nisc-orange" /> Voter Registry ({totalMembers} members)
         </h2>
+
+        {resetVoterMsg && (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 mb-4">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <p className="text-sm text-amber-700">{resetVoterMsg}</p>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -510,26 +462,81 @@ export default function AdminDashboard() {
                 <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Roll</th>
                 <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Year</th>
                 <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Dept</th>
-                <th className="py-2 text-xs text-nisc-gray font-medium">Status</th>
+                <th className="py-2 text-xs text-nisc-gray font-medium">Status & Actions</th>
               </tr>
             </thead>
             <tbody>
               {voters.map((v) => (
-                <tr key={v.id} className="border-b border-nisc-border/50 hover:bg-nisc-gray-light/50">
-                  <td className="py-2 pr-4 font-medium text-nisc-navy">{v.name}</td>
-                  <td className="py-2 pr-4 text-nisc-gray font-mono text-xs">{v.rollNumber}</td>
-                  <td className="py-2 pr-4 text-nisc-gray">{v.year}</td>
-                  <td className="py-2 pr-4 text-nisc-gray">{v.department}</td>
-                  <td className="py-2">
-                    {v.hasVoted ? (
-                      <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
-                        <CheckCircle2 className="w-3 h-3" /> Voted
-                      </span>
-                    ) : (
-                      <span className="text-xs text-nisc-gray">Pending</span>
-                    )}
-                  </td>
-                </tr>
+                <React.Fragment key={v.id}>
+                  <tr className="border-b border-nisc-border/50 hover:bg-nisc-gray-light/50">
+                    <td className="py-2 pr-4 font-medium text-nisc-navy">{v.name}</td>
+                    <td className="py-2 pr-4 text-nisc-gray font-mono text-xs">{v.rollNumber}</td>
+                    <td className="py-2 pr-4 text-nisc-gray">{v.year}</td>
+                    <td className="py-2 pr-4 text-nisc-gray">{v.department}</td>
+                    <td className="py-2">
+                      {v.hasVoted ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+                            <CheckCircle2 className="w-3 h-3" /> Voted
+                          </span>
+                          <button
+                            onClick={() => {
+                              setResetVoterMsg(null);
+                              setResetVoterRoll(resetVoterRoll === v.rollNumber ? null : v.rollNumber);
+                              setResetVoterReason("");
+                            }}
+                            className="flex items-center gap-1 text-[11px] text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded transition-all"
+                            title="Reset this member's vote so they can revote"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Reset Vote
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-nisc-gray">Pending</span>
+                      )}
+                    </td>
+                  </tr>
+
+                  {resetVoterRoll === v.rollNumber && (
+                    <tr className="bg-red-50/60 border-b border-red-200">
+                      <td colSpan={5} className="p-3">
+                        <div className="space-y-2 max-w-lg">
+                          <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            Reset vote for {v.name} ({v.rollNumber})?
+                          </p>
+                          <p className="text-xs text-nisc-gray">
+                            This will delete their ballot, decrement candidate counts, and allow this member to vote again.
+                          </p>
+                          <input
+                            type="text"
+                            value={resetVoterReason}
+                            onChange={(e) => setResetVoterReason(e.target.value)}
+                            placeholder="Reason for vote reset (required)..."
+                            className="w-full px-3 py-1.5 rounded-lg border border-red-200 bg-white text-xs text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-red-400"
+                          />
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              onClick={() => handleResetVoterVoteAction(v.rollNumber)}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-all"
+                            >
+                              Confirm Reset
+                            </button>
+                            <button
+                              onClick={() => {
+                                setResetVoterRoll(null);
+                                setResetVoterReason("");
+                              }}
+                              className="px-3 py-1 bg-white border border-nisc-border text-nisc-navy rounded-lg text-xs font-medium hover:bg-nisc-gray-light transition-all"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
