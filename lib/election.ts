@@ -213,3 +213,63 @@ export function adminEditVote(
 
   return { success: true, message: "Vote has been updated successfully." };
 }
+
+// ── Admin: Reset Candidate Votes ──
+
+export function adminResetCandidateVotes(
+  candidateId: string,
+  reason: string
+): { success: boolean; message: string } {
+  if (typeof window === "undefined") return { success: false, message: "Server-side not supported." };
+
+  const candidates = getCandidates();
+  const candIdx = candidates.findIndex((c) => c.id === candidateId);
+  if (candIdx === -1) {
+    return { success: false, message: "Candidate not found." };
+  }
+
+  const candidateName = candidates[candIdx].name;
+  const removedVotesCount = candidates[candIdx].voteCount;
+
+  // Reset candidate vote count to 0
+  candidates[candIdx].voteCount = 0;
+  saveCandidates(candidates);
+
+  // Remove candidate selections from vote records and update voters
+  const votes = getVoteRecords();
+  const voters = getStoredVotersList();
+
+  const updatedVotes = votes.filter((record) => {
+    const selectedThisCandidate = Object.values(record.selections).includes(candidateId);
+    if (selectedThisCandidate) {
+      // Reset voter's status so they can revote
+      const voterIdx = voters.findIndex((v) => v.rollNumber === record.voterRoll);
+      if (voterIdx !== -1) {
+        voters[voterIdx].hasVoted = false;
+        delete voters[voterIdx].voteReceiptId;
+        delete voters[voterIdx].voteTimestamp;
+      }
+      return false; // Remove this ballot
+    }
+    return true;
+  });
+
+  localStorage.setItem("nisc_votes", JSON.stringify(updatedVotes));
+  saveStoredVotersList(voters);
+
+  // Update total votes cast
+  updateElectionState({ totalVotesCast: updatedVotes.length });
+
+  // Audit log
+  addAuditLog(
+    "Candidate Votes Reset (Admin)",
+    `Admin reset all ${removedVotesCount} votes for ${candidateName} (${candidateId}). Reason: ${reason}`,
+    "EDIT"
+  );
+
+  return {
+    success: true,
+    message: `Successfully reset votes for ${candidateName}. ${removedVotesCount} vote(s) removed.`,
+  };
+}
+

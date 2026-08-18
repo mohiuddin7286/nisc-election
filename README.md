@@ -9,7 +9,6 @@ Built with **Next.js 14**, **TypeScript**, and **Tailwind CSS**.
 - 🗳️ **Secure Voting** — Roll number authentication for 70 NISC members
 - 👤 **Candidate Manifestos** — Full manifesto pages for all 3 candidates
 - 🔒 **Revote Prevention** — Members can only vote once
-- 📊 **Admin Dashboard** — Election controls, vote counts, ballot details, audit log
 - 🎨 **NISC Branding** — Warm peach/orange theme with premium typography
 
 ## Getting Started
