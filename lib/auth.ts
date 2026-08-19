@@ -7,10 +7,12 @@ const ADMIN_SESSION_KEY = "nisc_admin_session";
 const VOTERS_LIST_KEY = "nisc_voters_list";
 
 export function mapDbVoterToVoter(row: any): Voter {
+  const localVoter = initialVoters.find((v) => v.rollNumber === row.roll_number || v.id === row.id);
   return {
     id: row.id,
     name: row.name,
     rollNumber: row.roll_number,
+    passcode: row.passcode || row.pass || localVoter?.passcode || "NISC-8000",
     year: row.year,
     department: row.department,
     state: row.state,
@@ -22,25 +24,46 @@ export function mapDbVoterToVoter(row: any): Voter {
 
 // ── Voter Authentication ──
 
-export async function authenticateVoter(rollNumber: string): Promise<{
+export async function authenticateVoter(
+  rollNumber: string,
+  passcode: string
+): Promise<{
   success: boolean;
   voter?: Voter;
   message: string;
 }> {
-  const cleaned = rollNumber.trim();
-  if (!cleaned) {
+  const cleanedRoll = rollNumber.trim();
+  const cleanedPass = passcode.trim();
+
+  if (!cleanedRoll) {
     return { success: false, message: "Please enter your roll number." };
   }
+  if (!cleanedPass) {
+    return { success: false, message: "Please enter your unique passcode." };
+  }
+
+  const votersList = getStoredVotersList();
+  const localVoter = votersList.find(
+    (v) => v.rollNumber.toLowerCase() === cleanedRoll.toLowerCase()
+  );
 
   try {
     const { data, error } = await supabase
       .from("voters")
       .select("*")
-      .eq("roll_number", cleaned)
+      .eq("roll_number", cleanedRoll)
       .maybeSingle();
 
     if (!error && data) {
       const voter = mapDbVoterToVoter(data);
+      const expectedPass = (data.passcode || data.pass || localVoter?.passcode || "").trim();
+
+      if (expectedPass && expectedPass.toLowerCase() !== cleanedPass.toLowerCase()) {
+        return {
+          success: false,
+          message: "Invalid passcode. Please check your unique voter passcode and try again.",
+        };
+      }
       setStoredVoterSession(voter);
       return {
         success: true,
@@ -53,21 +76,25 @@ export async function authenticateVoter(rollNumber: string): Promise<{
   }
 
   // Fallback to local list
-  const voters = getStoredVotersList();
-  const found = voters.find((v) => v.rollNumber === cleaned);
-
-  if (!found) {
+  if (!localVoter) {
     return {
       success: false,
       message: "Roll number not found in the NISC member registry. Only registered NISC members can vote.",
     };
   }
 
-  setStoredVoterSession(found);
+  if (localVoter.passcode && localVoter.passcode.toLowerCase() !== cleanedPass.toLowerCase()) {
+    return {
+      success: false,
+      message: "Invalid passcode for this roll number. Please try again.",
+    };
+  }
+
+  setStoredVoterSession(localVoter);
   return {
     success: true,
-    voter: found,
-    message: "Welcome, " + found.name + "!",
+    voter: localVoter,
+    message: "Welcome, " + localVoter.name + "!",
   };
 }
 
@@ -122,6 +149,7 @@ export function getStoredVotersList(): Voter[] {
         if (existing) {
           return {
             ...initVoter,
+            passcode: initVoter.passcode,
             hasVoted: existing.hasVoted ?? false,
             voteReceiptId: existing.voteReceiptId,
             voteTimestamp: existing.voteTimestamp,

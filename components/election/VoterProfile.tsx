@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Voter } from "@/types/election";
-import { User, Hash, BookOpen, MapPin, LogOut, ArrowRight, CheckCircle2 } from "lucide-react";
+import { User, Hash, BookOpen, MapPin, LogOut, ArrowRight, CheckCircle2, KeyRound, Eye, EyeOff } from "lucide-react";
 
 interface VoterProfileProps {
   voter: Voter;
@@ -11,6 +11,8 @@ interface VoterProfileProps {
 }
 
 export default function VoterProfile({ voter, onProceedToVoting, onLogout }: VoterProfileProps) {
+  const [showPass, setShowPass] = useState(false);
+
   return (
     <div className="nisc-card p-6 md:p-8">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
@@ -31,28 +33,44 @@ export default function VoterProfile({ voter, onProceedToVoting, onLogout }: Vot
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-nisc-gray-light rounded-xl p-3">
           <div className="flex items-center gap-1.5 text-xs text-nisc-gray mb-1">
-            <Hash className="w-3 h-3" /> Roll Number
+            <Hash className="w-3 h-3 text-nisc-orange" /> Roll Number
           </div>
-          <p className="font-semibold text-nisc-navy text-sm">{voter.rollNumber}</p>
+          <p className="font-semibold font-mono text-nisc-navy text-sm">{voter.rollNumber}</p>
+        </div>
+        <div className="bg-nisc-gray-light rounded-xl p-3">
+          <div className="flex items-center justify-between text-xs text-nisc-gray mb-1">
+            <span className="flex items-center gap-1.5">
+              <KeyRound className="w-3 h-3 text-nisc-orange" /> Passcode
+            </span>
+            <button
+              onClick={() => setShowPass(!showPass)}
+              className="text-[10px] text-nisc-gray hover:text-nisc-navy"
+            >
+              {showPass ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </button>
+          </div>
+          <p className="font-semibold font-mono text-nisc-navy text-sm">
+            {showPass ? voter.passcode || "NISC-8000" : "••••••••"}
+          </p>
         </div>
         <div className="bg-nisc-gray-light rounded-xl p-3">
           <div className="flex items-center gap-1.5 text-xs text-nisc-gray mb-1">
-            <BookOpen className="w-3 h-3" /> Department
+            <BookOpen className="w-3 h-3 text-nisc-orange" /> Department
           </div>
           <p className="font-semibold text-nisc-navy text-sm">{voter.department}</p>
         </div>
         <div className="bg-nisc-gray-light rounded-xl p-3">
           <div className="flex items-center gap-1.5 text-xs text-nisc-gray mb-1">
-            <User className="w-3 h-3" /> Year
+            <User className="w-3 h-3 text-nisc-orange" /> Year
           </div>
           <p className="font-semibold text-nisc-navy text-sm">{voter.year}</p>
         </div>
         <div className="bg-nisc-gray-light rounded-xl p-3">
           <div className="flex items-center gap-1.5 text-xs text-nisc-gray mb-1">
-            <MapPin className="w-3 h-3" /> State
+            <MapPin className="w-3 h-3 text-nisc-orange" /> State
           </div>
           <p className="font-semibold text-nisc-navy text-sm">{voter.state}</p>
         </div>

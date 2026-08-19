@@ -29,6 +29,7 @@ export interface Voter {
   id: string;
   name: string;
   rollNumber: string;
+  passcode: string;
   year: string;
   department: string;
   state: string;

@@ -475,3 +475,82 @@ export async function adminResetVoterVote(
     return { success: false, message: "Error resetting vote in database." };
   }
 }
+
+// ── Admin: Reset All Votes ──
+
+export async function adminResetAllVotes(): Promise<{ success: boolean; message: string }> {
+  try {
+    // 1. Delete all votes in Supabase votes table
+    const { data: allVotes } = await supabase.from("votes").select("receipt_id");
+    if (allVotes && allVotes.length > 0) {
+      for (const v of allVotes) {
+        await supabase.from("votes").delete().eq("receipt_id", v.receipt_id);
+      }
+    }
+    await supabase.from("votes").delete().neq("receipt_id", "dummy-id");
+
+    // 2. Reset all voters in Supabase
+    await supabase
+      .from("voters")
+      .update({
+        has_voted: false,
+        vote_receipt_id: null,
+        vote_timestamp: null,
+      })
+      .neq("id", "dummy-id");
+
+    // 3. Reset candidate vote counts in Supabase
+    const { data: cands } = await supabase.from("candidates").select("id");
+    if (cands) {
+      for (const c of cands) {
+        await supabase.from("candidates").update({ vote_count: 0 }).eq("id", c.id);
+      }
+    }
+
+    // 4. Reset election state total votes cast in Supabase
+    await supabase.from("election_state").update({ total_votes_cast: 0 }).eq("id", 1);
+
+    // 5. Clear LocalStorage caches
+    if (typeof window !== "undefined") {
+      localStorage.setItem(VOTES_KEY, JSON.stringify([]));
+
+      const currentCands = getCandidates();
+      const resetCands = currentCands.map((c) => ({ ...c, voteCount: 0 }));
+      saveCandidates(resetCands);
+
+      const voters = getStoredVotersList();
+      const resetVoters = voters.map((v) => ({
+        ...v,
+        hasVoted: false,
+        voteReceiptId: undefined,
+        voteTimestamp: undefined,
+      }));
+      saveStoredVotersList(resetVoters);
+
+      const state = getElectionState();
+      localStorage.setItem(
+        ELECTION_STATE_KEY,
+        JSON.stringify({ ...state, totalVotesCast: 0 })
+      );
+    }
+
+    // 6. Log Audit Action
+    addAuditLog(
+      "All Votes Reset (Admin)",
+      "Admin executed a complete election vote reset. All candidate totals set to 0 and all ballots cleared.",
+      "ADMIN"
+    );
+
+    return {
+      success: true,
+      message: "All election votes have been successfully reset!",
+    };
+  } catch (err) {
+    console.error("Error performing full vote reset:", err);
+    return {
+      success: false,
+      message: "Failed to reset all votes in central database.",
+    };
+  }
+}
+

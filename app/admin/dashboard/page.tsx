@@ -11,6 +11,7 @@ import {
   fetchVoteRecordsFromSupabase,
   adminEditVote,
   adminResetVoterVote,
+  adminResetAllVotes,
   addAuditLog,
 } from "@/lib/election";
 import { ElectionState, AuditLog, Candidate, Position, Voter, VoteRecord } from "@/types/election";
@@ -24,11 +25,16 @@ import {
   ShieldCheck,
   AlertTriangle,
   Eye,
+  EyeOff,
   Play,
   Pause,
   Square,
   CheckCircle2,
   RotateCcw,
+  Trash2,
+  Copy,
+  Check,
+  KeyRound,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -38,6 +44,16 @@ export default function AdminDashboard() {
   const [voters, setVoters] = useState<Voter[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [voteRecords, setVoteRecords] = useState<VoteRecord[]>([]);
+
+  // Reset All Votes state
+  const [showResetAllModal, setShowResetAllModal] = useState(false);
+  const [resetAllLoading, setResetAllLoading] = useState(false);
+  const [resetAllMsg, setResetAllMsg] = useState<string | null>(null);
+
+  // Voter passcodes & filter state
+  const [showAllPasscodes, setShowAllPasscodes] = useState(false);
+  const [copiedRoll, setCopiedRoll] = useState<string | null>(null);
+  const [voterFilterText, setVoterFilterText] = useState("");
 
   // Vote edit
   const [searchRoll, setSearchRoll] = useState("");
@@ -106,6 +122,31 @@ export default function AdminDashboard() {
       "ADMIN"
     );
     refreshData();
+  };
+
+  const handleResetAllVotesConfirm = async () => {
+    setResetAllLoading(true);
+    setResetAllMsg(null);
+    try {
+      const result = await adminResetAllVotes();
+      setResetAllMsg(result.message);
+      if (result.success) {
+        await refreshData();
+        setShowResetAllModal(false);
+        setFoundVoter(null);
+        setFoundVote(null);
+      }
+    } catch (e) {
+      setResetAllMsg("An error occurred while resetting votes.");
+    } finally {
+      setResetAllLoading(false);
+    }
+  };
+
+  const handleCopyPasscode = (roll: string, passcode: string) => {
+    navigator.clipboard.writeText(passcode);
+    setCopiedRoll(roll);
+    setTimeout(() => setCopiedRoll(null), 2000);
   };
 
   const handleResetVoterVoteAction = async (voterRoll: string) => {
@@ -266,8 +307,79 @@ export default function AdminDashboard() {
               {state.resultsPublished ? "Published ✓" : "Publish"}
             </button>
           </div>
+
+          {/* Reset All Votes Control */}
+          <div className="flex items-center justify-between p-4 bg-red-50/70 border border-red-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <Trash2 className="w-5 h-5 text-red-600 shrink-0" />
+              <div>
+                <p className="font-semibold text-red-700 text-sm">Reset All Votes</p>
+                <p className="text-xs text-red-600">
+                  Wipe all submitted ballots, reset candidate vote counts to 0, and clear voter statuses.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setResetAllMsg(null);
+                setShowResetAllModal(true);
+              }}
+              className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-700 text-white shadow-sm transition-all flex items-center gap-1.5 shrink-0"
+            >
+              <RotateCcw className="w-4 h-4" /> Reset All Votes
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Reset All Votes Modal */}
+      {showResetAllModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-nisc-border space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="font-heading text-lg font-bold text-nisc-navy">
+                Reset ALL Election Votes?
+              </h3>
+              <p className="text-xs text-nisc-gray mt-1 leading-relaxed">
+                This action will permanently delete all recorded ballots ({votedCount} votes cast), set candidate vote totals to 0, and clear every member&apos;s voting receipt.
+              </p>
+            </div>
+
+            {resetAllMsg && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+                {resetAllMsg}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                disabled={resetAllLoading}
+                onClick={() => setShowResetAllModal(false)}
+                className="px-4 py-2 rounded-xl border border-nisc-border text-sm font-medium text-nisc-navy hover:bg-nisc-gray-light transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={resetAllLoading}
+                onClick={handleResetAllVotesConfirm}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {resetAllLoading ? (
+                  <span className="animate-pulse">Resetting All Votes...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" /> Confirm Full Reset
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Vote Counts */}
       <div className="nisc-card p-6">
@@ -458,9 +570,34 @@ export default function AdminDashboard() {
 
       {/* Voter List */}
       <div className="nisc-card p-6">
-        <h2 className="font-heading font-bold text-lg text-nisc-navy mb-4 flex items-center gap-2">
-          <Users className="w-5 h-5 text-nisc-orange" /> Voter Registry ({totalMembers} members)
-        </h2>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <h2 className="font-heading font-bold text-lg text-nisc-navy flex items-center gap-2">
+            <Users className="w-5 h-5 text-nisc-orange" /> Voter Registry ({totalMembers} members)
+          </h2>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={voterFilterText}
+              onChange={(e) => setVoterFilterText(e.target.value)}
+              placeholder="Search name or roll..."
+              className="px-3 py-1.5 rounded-xl border border-nisc-border bg-white text-xs text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-nisc-orange"
+            />
+            <button
+              onClick={() => setShowAllPasscodes(!showAllPasscodes)}
+              className="px-3 py-1.5 rounded-xl border border-nisc-border bg-white hover:bg-nisc-gray-light text-xs font-semibold text-nisc-navy flex items-center gap-1.5 transition-all"
+            >
+              {showAllPasscodes ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-nisc-gray" /> Hide Passcodes
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-nisc-orange" /> Show Passcodes
+                </>
+              )}
+            </button>
+          </div>
+        </div>
 
         {resetVoterMsg && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 mb-4">
@@ -474,85 +611,118 @@ export default function AdminDashboard() {
             <thead>
               <tr className="border-b border-nisc-border text-left">
                 <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Name</th>
-                <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Roll</th>
+                <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Roll Number</th>
+                <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Passcode</th>
                 <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Year</th>
                 <th className="py-2 pr-4 text-xs text-nisc-gray font-medium">Dept</th>
                 <th className="py-2 text-xs text-nisc-gray font-medium">Status & Actions</th>
               </tr>
             </thead>
             <tbody>
-              {voters.map((v) => (
-                <React.Fragment key={v.id}>
-                  <tr className="border-b border-nisc-border/50 hover:bg-nisc-gray-light/50">
-                    <td className="py-2 pr-4 font-medium text-nisc-navy">{v.name}</td>
-                    <td className="py-2 pr-4 text-nisc-gray font-mono text-xs">{v.rollNumber}</td>
-                    <td className="py-2 pr-4 text-nisc-gray">{v.year}</td>
-                    <td className="py-2 pr-4 text-nisc-gray">{v.department}</td>
-                    <td className="py-2">
-                      {v.hasVoted ? (
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
-                            <CheckCircle2 className="w-3 h-3" /> Voted
-                          </span>
-                          <button
-                            onClick={() => {
-                              setResetVoterMsg(null);
-                              setResetVoterRoll(resetVoterRoll === v.rollNumber ? null : v.rollNumber);
-                              setResetVoterReason("");
-                            }}
-                            className="flex items-center gap-1 text-[11px] text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded transition-all"
-                            title="Reset this member's vote so they can revote"
-                          >
-                            <RotateCcw className="w-3 h-3" /> Reset Vote
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-nisc-gray">Pending</span>
-                      )}
-                    </td>
-                  </tr>
-
-                  {resetVoterRoll === v.rollNumber && (
-                    <tr className="bg-red-50/60 border-b border-red-200">
-                      <td colSpan={5} className="p-3">
-                        <div className="space-y-2 max-w-lg">
-                          <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            Reset vote for {v.name} ({v.rollNumber})?
-                          </p>
-                          <p className="text-xs text-nisc-gray">
-                            This will delete their ballot, decrement candidate counts, and allow this member to vote again.
-                          </p>
-                          <input
-                            type="text"
-                            value={resetVoterReason}
-                            onChange={(e) => setResetVoterReason(e.target.value)}
-                            placeholder="Reason for vote reset (required)..."
-                            className="w-full px-3 py-1.5 rounded-lg border border-red-200 bg-white text-xs text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-red-400"
-                          />
-                          <div className="flex items-center gap-2 pt-1">
+              {voters
+                .filter((v) => {
+                  if (!voterFilterText.trim()) return true;
+                  const q = voterFilterText.toLowerCase();
+                  return (
+                    v.name.toLowerCase().includes(q) ||
+                    v.rollNumber.toLowerCase().includes(q) ||
+                    (v.passcode && v.passcode.toLowerCase().includes(q))
+                  );
+                })
+                .map((v) => {
+                  const passcodeVal = v.passcode || "NISC-8000";
+                  const isCopied = copiedRoll === v.rollNumber;
+                  return (
+                    <React.Fragment key={v.id}>
+                      <tr className="border-b border-nisc-border/50 hover:bg-nisc-gray-light/50">
+                        <td className="py-2 pr-4 font-medium text-nisc-navy">{v.name}</td>
+                        <td className="py-2 pr-4 text-nisc-gray font-mono text-xs">{v.rollNumber}</td>
+                        <td className="py-2 pr-4 font-mono text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className={showAllPasscodes ? "text-nisc-navy font-semibold" : "text-slate-400"}>
+                              {showAllPasscodes ? passcodeVal : "••••••••"}
+                            </span>
                             <button
-                              onClick={() => handleResetVoterVoteAction(v.rollNumber)}
-                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-all"
+                              onClick={() => handleCopyPasscode(v.rollNumber, passcodeVal)}
+                              className="text-nisc-gray hover:text-nisc-orange p-1 transition-colors"
+                              title="Copy passcode"
                             >
-                              Confirm Reset
-                            </button>
-                            <button
-                              onClick={() => {
-                                setResetVoterRoll(null);
-                                setResetVoterReason("");
-                              }}
-                              className="px-3 py-1 bg-white border border-nisc-border text-nisc-navy rounded-lg text-xs font-medium hover:bg-nisc-gray-light transition-all"
-                            >
-                              Cancel
+                              {isCopied ? (
+                                <Check className="w-3.5 h-3.5 text-green-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
                             </button>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
+                        </td>
+                        <td className="py-2 pr-4 text-nisc-gray">{v.year}</td>
+                        <td className="py-2 pr-4 text-nisc-gray">{v.department}</td>
+                        <td className="py-2">
+                          {v.hasVoted ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+                                <CheckCircle2 className="w-3 h-3" /> Voted
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setResetVoterMsg(null);
+                                  setResetVoterRoll(resetVoterRoll === v.rollNumber ? null : v.rollNumber);
+                                  setResetVoterReason("");
+                                }}
+                                className="flex items-center gap-1 text-[11px] text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded transition-all"
+                                title="Reset this member's vote so they can revote"
+                              >
+                                <RotateCcw className="w-3 h-3" /> Reset Vote
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-nisc-gray">Pending</span>
+                          )}
+                        </td>
+                      </tr>
+
+                      {resetVoterRoll === v.rollNumber && (
+                        <tr className="bg-red-50/60 border-b border-red-200">
+                          <td colSpan={6} className="p-3">
+                            <div className="space-y-2 max-w-lg">
+                              <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                Reset vote for {v.name} ({v.rollNumber})?
+                              </p>
+                              <p className="text-xs text-nisc-gray">
+                                This will delete their ballot, decrement candidate counts, and allow this member to vote again.
+                              </p>
+                              <input
+                                type="text"
+                                value={resetVoterReason}
+                                onChange={(e) => setResetVoterReason(e.target.value)}
+                                placeholder="Reason for vote reset (required)..."
+                                className="w-full px-3 py-1.5 rounded-lg border border-red-200 bg-white text-xs text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-red-400"
+                              />
+                              <div className="flex items-center gap-2 pt-1">
+                                <button
+                                  onClick={() => handleResetVoterVoteAction(v.rollNumber)}
+                                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium transition-all"
+                                >
+                                  Confirm Reset
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setResetVoterRoll(null);
+                                    setResetVoterReason("");
+                                  }}
+                                  className="px-3 py-1 bg-white border border-nisc-border text-nisc-navy rounded-lg text-xs font-medium hover:bg-nisc-gray-light transition-all"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
             </tbody>
           </table>
         </div>

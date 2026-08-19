@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { authenticateVoter } from "@/lib/auth";
 import { Voter } from "@/types/election";
-import { LogIn, AlertCircle } from "lucide-react";
+import { LogIn, AlertCircle, Eye, EyeOff, KeyRound, Hash } from "lucide-react";
 
 interface VoterLoginProps {
   onLoginSuccess: (voter: Voter) => void;
@@ -11,6 +11,8 @@ interface VoterLoginProps {
 
 export default function VoterLogin({ onLoginSuccess }: VoterLoginProps) {
   const [rollNumber, setRollNumber] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,14 +22,14 @@ export default function VoterLogin({ onLoginSuccess }: VoterLoginProps) {
     setLoading(true);
 
     try {
-      const result = await authenticateVoter(rollNumber);
+      const result = await authenticateVoter(rollNumber, passcode);
       if (result.success && result.voter) {
         onLoginSuccess(result.voter);
       } else {
         setError(result.message);
       }
     } catch (err) {
-      setError("Failed to authenticate. Please check your internet connection.");
+      setError("Failed to authenticate. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -44,16 +46,16 @@ export default function VoterLogin({ onLoginSuccess }: VoterLoginProps) {
           Voter Authentication
         </h2>
         <p className="text-sm text-nisc-gray mb-6">
-          Enter your KLH roll number to verify your identity and access the ballot.
+          Enter your 10-digit KLH roll number and unique voter passcode to access your ballot.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="text-left">
             <label
               htmlFor="rollNumber"
-              className="block text-sm font-medium text-nisc-navy mb-1.5"
+              className="flex items-center gap-1.5 text-sm font-medium text-nisc-navy mb-1.5"
             >
-              Roll Number
+              <Hash className="w-4 h-4 text-nisc-orange" /> Roll Number
             </label>
             <input
               id="rollNumber"
@@ -61,9 +63,37 @@ export default function VoterLogin({ onLoginSuccess }: VoterLoginProps) {
               value={rollNumber}
               onChange={(e) => setRollNumber(e.target.value)}
               placeholder="e.g. 2410080026"
-              className="w-full px-4 py-3 rounded-xl border border-nisc-border bg-white text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-nisc-orange focus:ring-2 focus:ring-nisc-orange/20 transition-all text-sm"
+              className="w-full px-4 py-3 rounded-xl border border-nisc-border bg-white text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-nisc-orange focus:ring-2 focus:ring-nisc-orange/20 transition-all text-sm font-mono"
               autoComplete="off"
             />
+          </div>
+
+          <div className="text-left">
+            <label
+              htmlFor="passcode"
+              className="flex items-center gap-1.5 text-sm font-medium text-nisc-navy mb-1.5"
+            >
+              <KeyRound className="w-4 h-4 text-nisc-orange" /> Unique Passcode
+            </label>
+            <div className="relative">
+              <input
+                id="passcode"
+                type={showPasscode ? "text" : "password"}
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                placeholder="e.g. NISC-8029"
+                className="w-full px-4 py-3 pr-10 rounded-xl border border-nisc-border bg-white text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-nisc-orange focus:ring-2 focus:ring-nisc-orange/20 transition-all text-sm font-mono"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPasscode(!showPasscode)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-nisc-gray hover:text-nisc-navy transition-colors p-1"
+                title={showPasscode ? "Hide passcode" : "Show passcode"}
+              >
+                {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -75,23 +105,24 @@ export default function VoterLogin({ onLoginSuccess }: VoterLoginProps) {
 
           <button
             type="submit"
-            disabled={loading || !rollNumber.trim()}
+            disabled={loading || !rollNumber.trim() || !passcode.trim()}
             className="w-full nisc-btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
-              <span className="animate-pulse">Verifying...</span>
+              <span className="animate-pulse">Verifying Credentials...</span>
             ) : (
               <>
-                <LogIn className="w-4 h-4" /> Verify & Continue
+                <LogIn className="w-4 h-4" /> Verify & Access Ballot
               </>
             )}
           </button>
         </form>
 
         <p className="text-xs text-nisc-gray mt-5">
-          Only registered NISC members can access the voting portal.
+          Only registered NISC members with a valid passcode can access the voting portal.
         </p>
       </div>
     </div>
   );
 }
+
