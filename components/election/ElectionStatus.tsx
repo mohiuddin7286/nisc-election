@@ -24,13 +24,13 @@ export default function ElectionStatus() {
         </div>
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-heading font-bold text-nisc-navy">Nomination Status</h3>
+            <h3 className="font-heading font-bold text-nisc-navy">Election Status</h3>
             <span className={`nisc-badge ${cfg.bgColor} ${cfg.color} border text-xs`}>
               {cfg.label}
             </span>
           </div>
           <p className="text-sm text-nisc-gray">
-            Two nominations were cancelled because they did not satisfy NISC eligibility requirements.
+            Election rules announced and voting officially started on 19 August 2026 at 12:00 PM.
           </p>
         </div>
       </div>
@@ -38,8 +38,8 @@ export default function ElectionStatus() {
       <div className="flex items-center gap-2 text-sm text-nisc-gray shrink-0">
         <Clock className="w-4 h-4 text-nisc-orange" />
         <span>
-          Campaigning until{" "}
-          <span className="font-semibold text-nisc-orange">20 August 2026, 4:00 PM</span>
+          Voting Started:{" "}
+          <span className="font-semibold text-nisc-orange">19 August 2026, 12:00 PM</span>
         </span>
       </div>
     </div>

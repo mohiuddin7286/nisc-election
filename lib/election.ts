@@ -27,7 +27,7 @@ export function saveCandidates(candidates: Candidate[]): void {
 // ── Election State ──
 
 const defaultElectionState: ElectionState = {
-  status: "UPCOMING",
+  status: "OPEN",
   resultsPublished: false,
   totalVotesCast: 0,
 };

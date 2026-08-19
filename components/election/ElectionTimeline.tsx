@@ -21,23 +21,23 @@ const steps = [
   {
     step: 3,
     title: "Campaign",
-    status: "ACTIVE" as const,
+    status: "COMPLETED" as const,
     icon: Megaphone,
-    description: "Candidates present vision & manifesto until 20 August 2026, 4:00 PM.",
+    description: "Candidates presented vision & manifesto until 19 August 2026, 12:00 PM.",
   },
   {
     step: 4,
     title: "Voting",
-    status: "UPCOMING" as const,
+    status: "ACTIVE" as const,
     icon: Vote,
-    description: "Procedure & rules announced on 20 August 2026, 9:00 PM. Secret ballot conducted.",
+    description: "Procedure & rules announced on 19 August 2026. Secret ballot voting started 12:00 PM, 19 August 2026.",
   },
   {
     step: 5,
     title: "Results",
     status: "UPCOMING" as const,
     icon: Trophy,
-    description: "Votes counted transparently and official winners declared.",
+    description: "Votes counted transparently and official winners declared after polling ends.",
   },
 ];
 

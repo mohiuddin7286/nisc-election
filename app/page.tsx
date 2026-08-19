@@ -42,11 +42,11 @@ export default function Home() {
           {/* Title */}
           <h1 className="font-heading text-4xl md:text-5xl lg:text-6xl font-extrabold text-nisc-navy leading-tight tracking-tight mt-4">
             2026–27 Elections Portal —{" "}
-            <span className="gradient-text">Active Campaign</span>
+            <span className="gradient-text">Voting Live</span>
           </h1>
 
           <p className="text-base md:text-lg text-nisc-gray mt-4 max-w-xl mx-auto leading-relaxed">
-            Official announcement of candidate nominations, campaign guidelines, election observers, and upcoming voting procedures.
+            Official election rules announced on 19 August 2026. Voting officially started at 12:00 PM, 19 August 2026. Cast your secret ballot now!
           </p>
 
           {/* CTA Buttons */}
@@ -139,15 +139,15 @@ export default function Home() {
           <BookOpen className="w-5 h-5 text-nisc-gray shrink-0 mt-0.5" />
           <div>
             <h3 className="font-heading font-bold text-nisc-navy">
-              Voting Procedure & Rules Announcement
+              Voting Procedure & Rules Announced
             </h3>
             <p className="text-sm text-nisc-gray mt-0.5">
-              Official voting regulations and procedure will be published on campus channels.
+              Official voting regulations & rules announced on 19 August 2026. Polling is currently OPEN.
             </p>
           </div>
         </div>
-        <span className="nisc-badge bg-amber-50 text-amber-700 border border-amber-200 shrink-0 text-xs">
-          20 August 2026, 9:00 PM
+        <span className="nisc-badge bg-green-50 text-green-700 border border-green-200 shrink-0 text-xs">
+          Voting Live (Started 19 Aug, 12:00 PM)
         </span>
       </div>
 
