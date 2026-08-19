@@ -1,12 +1,27 @@
 "use client";
 
-import React from "react";
-import { getCandidates, getElectionState } from "@/lib/election";
+import React, { useEffect, useState } from "react";
+import { getCandidates, getElectionState, fetchCandidatesFromSupabase, fetchElectionStateFromSupabase } from "@/lib/election";
+import { Candidate, ElectionState } from "@/types/election";
 import { Trophy, Lock, BarChart3 } from "lucide-react";
 
 export default function ResultsPage() {
-  const state = getElectionState();
-  const candidates = getCandidates();
+  const [state, setState] = useState<ElectionState>(getElectionState());
+  const [candidates, setCandidates] = useState<Candidate[]>(getCandidates());
+
+  useEffect(() => {
+    const loadData = async () => {
+      const [st, cands] = await Promise.all([
+        fetchElectionStateFromSupabase(),
+        fetchCandidatesFromSupabase(),
+      ]);
+      setState(st);
+      setCandidates(cands);
+    };
+    loadData();
+    const interval = setInterval(loadData, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const isPublished = state.resultsPublished;
 

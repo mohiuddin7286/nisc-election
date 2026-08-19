@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { checkIsAdminAuthenticated, logoutAdmin, getStoredVotersList } from "@/lib/auth";
+import { checkIsAdminAuthenticated, logoutAdmin, fetchVotersFromSupabase } from "@/lib/auth";
 import {
-  getElectionState,
-  updateElectionState,
-  getCandidates,
-  getAuditLogs,
-  getVoteRecords,
+  fetchElectionStateFromSupabase,
+  updateElectionStateAsync,
+  fetchCandidatesFromSupabase,
+  fetchAuditLogsFromSupabase,
+  fetchVoteRecordsFromSupabase,
   adminEditVote,
   adminResetVoterVote,
   addAuditLog,
@@ -53,12 +53,23 @@ export default function AdminDashboard() {
   const [resetVoterReason, setResetVoterReason] = useState("");
   const [resetVoterMsg, setResetVoterMsg] = useState<string | null>(null);
 
-  const refreshData = useCallback(() => {
-    setState(getElectionState());
-    setCandidates(getCandidates());
-    setVoters(getStoredVotersList());
-    setAuditLogs(getAuditLogs());
-    setVoteRecords(getVoteRecords());
+  const refreshData = useCallback(async () => {
+    try {
+      const [st, cands, vtrs, logs, recs] = await Promise.all([
+        fetchElectionStateFromSupabase(),
+        fetchCandidatesFromSupabase(),
+        fetchVotersFromSupabase(),
+        fetchAuditLogsFromSupabase(),
+        fetchVoteRecordsFromSupabase(),
+      ]);
+      setState(st);
+      setCandidates(cands);
+      setVoters(vtrs);
+      setAuditLogs(logs);
+      setVoteRecords(recs);
+    } catch (err) {
+      console.error("Error refreshing admin data:", err);
+    }
   }, []);
 
   useEffect(() => {
@@ -67,6 +78,10 @@ export default function AdminDashboard() {
       return;
     }
     refreshData();
+    const interval = setInterval(() => {
+      refreshData();
+    }, 3000);
+    return () => clearInterval(interval);
   }, [router, refreshData]);
 
   if (!state) return null;
@@ -75,15 +90,15 @@ export default function AdminDashboard() {
   const votedCount = voters.filter((v) => v.hasVoted).length;
   const turnoutPct = totalMembers > 0 ? Math.round((votedCount / totalMembers) * 100) : 0;
 
-  const handleStatusChange = (newStatus: ElectionState["status"]) => {
-    const updated = updateElectionState({ status: newStatus });
+  const handleStatusChange = async (newStatus: ElectionState["status"]) => {
+    const updated = await updateElectionStateAsync({ status: newStatus });
     setState(updated);
     addAuditLog("Election Status Changed", `Status changed to ${newStatus}`, "ADMIN");
     refreshData();
   };
 
-  const handlePublishResults = () => {
-    const updated = updateElectionState({ resultsPublished: !state.resultsPublished });
+  const handlePublishResults = async () => {
+    const updated = await updateElectionStateAsync({ resultsPublished: !state.resultsPublished });
     setState(updated);
     addAuditLog(
       state.resultsPublished ? "Results Unpublished" : "Results Published",
@@ -93,15 +108,15 @@ export default function AdminDashboard() {
     refreshData();
   };
 
-  const handleResetVoterVoteAction = (voterRoll: string) => {
+  const handleResetVoterVoteAction = async (voterRoll: string) => {
     if (!resetVoterReason.trim()) {
       setResetVoterMsg("Please provide a reason before resetting this member's vote.");
       return;
     }
-    const result = adminResetVoterVote(voterRoll, resetVoterReason);
+    const result = await adminResetVoterVote(voterRoll, resetVoterReason);
     setResetVoterMsg(result.message);
     if (result.success) {
-      refreshData();
+      await refreshData();
       setResetVoterRoll(null);
       setResetVoterReason("");
       if (foundVoter && foundVoter.rollNumber === voterRoll) {
@@ -129,19 +144,19 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!foundVoter || !editPres || !editVP || !editNote.trim()) {
       setEditMsg("Please fill all fields including an edit note.");
       return;
     }
-    const result = adminEditVote(
+    const result = await adminEditVote(
       foundVoter.rollNumber,
       { President: editPres, "Vice President": editVP } as Record<Position, string>,
       editNote
     );
     setEditMsg(result.message);
     if (result.success) {
-      refreshData();
+      await refreshData();
       setEditNote("");
     }
   };

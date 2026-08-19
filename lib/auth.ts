@@ -1,22 +1,58 @@
 import { Voter } from "@/types/election";
 import { initialVoters } from "@/data/voters";
+import { supabase } from "./supabase";
 
 const VOTER_SESSION_KEY = "nisc_voter_session";
 const ADMIN_SESSION_KEY = "nisc_admin_session";
 const VOTERS_LIST_KEY = "nisc_voters_list";
 
+export function mapDbVoterToVoter(row: any): Voter {
+  return {
+    id: row.id,
+    name: row.name,
+    rollNumber: row.roll_number,
+    year: row.year,
+    department: row.department,
+    state: row.state,
+    hasVoted: Boolean(row.has_voted),
+    voteReceiptId: row.vote_receipt_id || undefined,
+    voteTimestamp: row.vote_timestamp || undefined,
+  };
+}
+
 // ── Voter Authentication ──
 
-export function authenticateVoter(rollNumber: string): {
+export async function authenticateVoter(rollNumber: string): Promise<{
   success: boolean;
   voter?: Voter;
   message: string;
-} {
+}> {
   const cleaned = rollNumber.trim();
   if (!cleaned) {
     return { success: false, message: "Please enter your roll number." };
   }
 
+  try {
+    const { data, error } = await supabase
+      .from("voters")
+      .select("*")
+      .eq("roll_number", cleaned)
+      .maybeSingle();
+
+    if (!error && data) {
+      const voter = mapDbVoterToVoter(data);
+      setStoredVoterSession(voter);
+      return {
+        success: true,
+        voter,
+        message: "Welcome, " + voter.name + "!",
+      };
+    }
+  } catch (err) {
+    console.warn("Supabase voter auth fallback to local list:", err);
+  }
+
+  // Fallback to local list
   const voters = getStoredVotersList();
   const found = voters.find((v) => v.rollNumber === cleaned);
 
@@ -27,9 +63,7 @@ export function authenticateVoter(rollNumber: string): {
     };
   }
 
-  // Save session
   setStoredVoterSession(found);
-
   return {
     success: true,
     voter: found,
@@ -60,6 +94,20 @@ export function clearVoterSession(): void {
 }
 
 // ── Voter Registry ──
+
+export async function fetchVotersFromSupabase(): Promise<Voter[]> {
+  try {
+    const { data, error } = await supabase.from("voters").select("*").order("id", { ascending: true });
+    if (!error && data && data.length > 0) {
+      const voters = data.map(mapDbVoterToVoter);
+      saveStoredVotersList(voters);
+      return voters;
+    }
+  } catch (err) {
+    console.warn("Error fetching voters from Supabase:", err);
+  }
+  return getStoredVotersList();
+}
 
 export function getStoredVotersList(): Voter[] {
   if (typeof window === "undefined") return initialVoters;

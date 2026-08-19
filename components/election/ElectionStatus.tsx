@@ -1,11 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ShieldCheck, Clock } from "lucide-react";
-import { getElectionState } from "@/lib/election";
+import { getElectionState, fetchElectionStateFromSupabase } from "@/lib/election";
+import { ElectionState } from "@/types/election";
 
 export default function ElectionStatus() {
-  const state = getElectionState();
+  const [state, setState] = useState<ElectionState>(getElectionState());
+
+  useEffect(() => {
+    fetchElectionStateFromSupabase().then(setState);
+  }, []);
 
   const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
     UPCOMING: { label: "UPCOMING", color: "text-amber-600", bgColor: "bg-amber-50 border-amber-200" },

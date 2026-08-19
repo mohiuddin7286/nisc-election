@@ -6,8 +6,8 @@ import VoterProfile from "@/components/election/VoterProfile";
 import VotingForm from "@/components/election/VotingForm";
 import VoteReview from "@/components/election/VoteReview";
 import VoteConfirmation from "@/components/election/VoteConfirmation";
-import { getStoredVoterSession, setStoredVoterSession, clearVoterSession, getStoredVotersList } from "@/lib/auth";
-import { getCandidates, submitVoteBallot } from "@/lib/election";
+import { getStoredVoterSession, setStoredVoterSession, clearVoterSession, fetchVotersFromSupabase } from "@/lib/auth";
+import { getCandidates, fetchCandidatesFromSupabase, submitVoteBallot } from "@/lib/election";
 import { Candidate, Position, Voter } from "@/types/election";
 import { AlertCircle, Vote } from "lucide-react";
 
@@ -15,21 +15,23 @@ type VoterFlowStep = "LOGIN" | "PROFILE" | "BALLOT" | "REVIEW" | "CONFIRMATION";
 
 export default function VoterPage() {
   const [voter, setVoter] = useState<Voter | null>(null);
-  const [candidates] = useState<Candidate[]>(getCandidates());
+  const [candidates, setCandidates] = useState<Candidate[]>(getCandidates());
   const [step, setStep] = useState<VoterFlowStep>("LOGIN");
   const [selections, setSelections] = useState<Record<Position, string> | null>(null);
   const [receipt, setReceipt] = useState<{ id: string; timestamp: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    fetchCandidatesFromSupabase().then(setCandidates);
     const session = getStoredVoterSession();
     if (session) {
-      // Cross-reference with latest voter list to get updated hasVoted status
-      const latestVoters = getStoredVotersList();
-      const latest = latestVoters.find((v) => v.rollNumber === session.rollNumber);
-      const refreshedVoter = latest || session;
-      setVoter(refreshedVoter);
-      setStep("PROFILE");
+      fetchVotersFromSupabase().then((latestVoters) => {
+        const latest = latestVoters.find((v) => v.rollNumber === session.rollNumber);
+        const refreshedVoter = latest || session;
+        setVoter(refreshedVoter);
+        setStep("PROFILE");
+      });
     }
   }, []);
 
@@ -43,19 +45,27 @@ export default function VoterPage() {
     setStep("REVIEW");
   };
 
-  const handleConfirmSubmit = () => {
-    if (!voter || !selections) return;
+  const handleConfirmSubmit = async () => {
+    if (!voter || !selections || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-    const res = submitVoteBallot(voter, selections);
-    if (res.success && res.receiptId) {
-      const now = new Date().toISOString();
-      setReceipt({ id: res.receiptId, timestamp: now });
-      const updatedVoter = { ...voter, hasVoted: true, voteReceiptId: res.receiptId, voteTimestamp: now };
-      setVoter(updatedVoter);
-      setStoredVoterSession(updatedVoter); // Persist the updated session
-      setStep("CONFIRMATION");
-    } else {
-      setSubmitError(res.message);
+    try {
+      const res = await submitVoteBallot(voter, selections);
+      if (res.success && res.receiptId) {
+        const now = new Date().toISOString();
+        setReceipt({ id: res.receiptId, timestamp: now });
+        const updatedVoter = { ...voter, hasVoted: true, voteReceiptId: res.receiptId, voteTimestamp: now };
+        setVoter(updatedVoter);
+        setStoredVoterSession(updatedVoter);
+        setStep("CONFIRMATION");
+      } else {
+        setSubmitError(res.message);
+      }
+    } catch (err) {
+      setSubmitError("Failed to submit vote. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

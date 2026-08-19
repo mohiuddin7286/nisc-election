@@ -14,20 +14,23 @@ export default function VoterLogin({ onLoginSuccess }: VoterLoginProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    setTimeout(() => {
-      const result = authenticateVoter(rollNumber);
+    try {
+      const result = await authenticateVoter(rollNumber);
       if (result.success && result.voter) {
         onLoginSuccess(result.voter);
       } else {
         setError(result.message);
       }
+    } catch (err) {
+      setError("Failed to authenticate. Please check your internet connection.");
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   return (

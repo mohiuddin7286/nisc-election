@@ -1,7 +1,8 @@
 import { Candidate, ElectionState, AuditLog, VoteRecord, Position, Voter } from "@/types/election";
 import { initialCandidates } from "@/data/candidates";
 import { generateVoteReceiptId } from "./validation";
-import { getStoredVotersList, saveStoredVotersList } from "./auth";
+import { getStoredVotersList, saveStoredVotersList, mapDbVoterToVoter } from "./auth";
+import { supabase } from "./supabase";
 
 const CANDIDATES_KEY = "nisc_candidates";
 const ELECTION_STATE_KEY = "nisc_election_state";
@@ -10,6 +11,26 @@ const VOTES_KEY = "nisc_votes";
 
 // ── Candidates ──
 
+export function mapDbCandidateToCandidate(row: any): Candidate {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    codename: row.codename,
+    year: row.year,
+    department: row.department,
+    state: row.state,
+    color: row.color,
+    colorLight: row.color_light || row.colorLight,
+    icon: row.icon,
+    contestingFor: row.contesting_for || row.contestingFor,
+    vision: row.vision,
+    pillars: row.pillars,
+    closingStatement: row.closing_statement || row.closingStatement,
+    voteCount: Number(row.vote_count ?? row.voteCount ?? 0),
+  };
+}
+
 export function getCandidates(): Candidate[] {
   if (typeof window === "undefined") return initialCandidates;
   try {
@@ -17,6 +38,20 @@ export function getCandidates(): Candidate[] {
     if (raw) return JSON.parse(raw);
   } catch {}
   return initialCandidates;
+}
+
+export async function fetchCandidatesFromSupabase(): Promise<Candidate[]> {
+  try {
+    const { data, error } = await supabase.from("candidates").select("*");
+    if (!error && data && data.length > 0) {
+      const candidates = data.map(mapDbCandidateToCandidate);
+      saveCandidates(candidates);
+      return candidates;
+    }
+  } catch (err) {
+    console.warn("Error fetching candidates from Supabase:", err);
+  }
+  return getCandidates();
 }
 
 export function saveCandidates(candidates: Candidate[]): void {
@@ -41,9 +76,54 @@ export function getElectionState(): ElectionState {
   return defaultElectionState;
 }
 
+export async function fetchElectionStateFromSupabase(): Promise<ElectionState> {
+  try {
+    const { data, error } = await supabase.from("election_state").select("*").eq("id", 1).maybeSingle();
+    if (!error && data) {
+      const state: ElectionState = {
+        status: data.status || "OPEN",
+        resultsPublished: Boolean(data.results_published),
+        totalVotesCast: Number(data.total_votes_cast || 0),
+      };
+      if (typeof window !== "undefined") {
+        localStorage.setItem(ELECTION_STATE_KEY, JSON.stringify(state));
+      }
+      return state;
+    }
+  } catch (err) {
+    console.warn("Error fetching election state from Supabase:", err);
+  }
+  return getElectionState();
+}
+
 export function updateElectionState(updates: Partial<ElectionState>): ElectionState {
   const current = getElectionState();
   const updated = { ...current, ...updates };
+  if (typeof window !== "undefined") {
+    localStorage.setItem(ELECTION_STATE_KEY, JSON.stringify(updated));
+  }
+  // Async update Supabase in background
+  updateElectionStateAsync(updates).catch(() => {});
+  return updated;
+}
+
+export async function updateElectionStateAsync(updates: Partial<ElectionState>): Promise<ElectionState> {
+  const current = await fetchElectionStateFromSupabase();
+  const updated = { ...current, ...updates };
+
+  try {
+    const payload: any = {};
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.resultsPublished !== undefined) payload.results_published = updates.resultsPublished;
+    if (updates.totalVotesCast !== undefined) payload.total_votes_cast = updates.totalVotesCast;
+
+    if (Object.keys(payload).length > 0) {
+      await supabase.from("election_state").update(payload).eq("id", 1);
+    }
+  } catch (err) {
+    console.warn("Error updating election state in Supabase:", err);
+  }
+
   if (typeof window !== "undefined") {
     localStorage.setItem(ELECTION_STATE_KEY, JSON.stringify(updated));
   }
@@ -61,10 +141,32 @@ export function getAuditLogs(): AuditLog[] {
   return [];
 }
 
+export async function fetchAuditLogsFromSupabase(): Promise<AuditLog[]> {
+  try {
+    const { data, error } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false });
+    if (!error && data) {
+      const logs: AuditLog[] = data.map((row) => ({
+        id: row.id,
+        timestamp: row.created_at || new Date().toISOString(),
+        action: row.action,
+        details: row.details,
+        category: row.category,
+      }));
+      if (typeof window !== "undefined") {
+        localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(logs));
+      }
+      return logs;
+    }
+  } catch (err) {
+    console.warn("Error fetching audit logs from Supabase:", err);
+  }
+  return getAuditLogs();
+}
+
 export function addAuditLog(action: string, details: string, category: AuditLog["category"]): void {
   const logs = getAuditLogs();
   const newLog: AuditLog = {
-    id: `log-${Date.now()}`,
+    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     timestamp: new Date().toISOString(),
     action,
     details,
@@ -73,6 +175,23 @@ export function addAuditLog(action: string, details: string, category: AuditLog[
   const updated = [newLog, ...logs];
   if (typeof window !== "undefined") {
     localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(updated));
+  }
+  addAuditLogAsync(newLog).catch(() => {});
+}
+
+async function addAuditLogAsync(log: AuditLog): Promise<void> {
+  try {
+    await supabase.from("audit_logs").insert([
+      {
+        id: log.id,
+        action: log.action,
+        details: log.details,
+        category: log.category,
+        created_at: log.timestamp,
+      },
+    ]);
+  } catch (err) {
+    console.warn("Error inserting audit log into Supabase:", err);
   }
 }
 
@@ -87,19 +206,95 @@ export function getVoteRecords(): VoteRecord[] {
   return [];
 }
 
+export async function fetchVoteRecordsFromSupabase(): Promise<VoteRecord[]> {
+  try {
+    const { data, error } = await supabase.from("votes").select("*").order("created_at", { ascending: true });
+    if (!error && data) {
+      const records: VoteRecord[] = data.map((row) => ({
+        receiptId: row.receipt_id,
+        timestamp: row.created_at || new Date().toISOString(),
+        selections: {
+          President: row.president_vote,
+          "Vice President": row.vp_vote,
+        },
+        voterRoll: row.voter_roll,
+      }));
+      if (typeof window !== "undefined") {
+        localStorage.setItem(VOTES_KEY, JSON.stringify(records));
+      }
+      return records;
+    }
+  } catch (err) {
+    console.warn("Error fetching votes from Supabase:", err);
+  }
+  return getVoteRecords();
+}
+
+// ── Helper: Recalculate Candidate Vote Counts ──
+
+async function recalculateVoteCountsInSupabase(): Promise<void> {
+  try {
+    const { data: votes } = await supabase.from("votes").select("*");
+    const { data: candidates } = await supabase.from("candidates").select("*");
+
+    if (!candidates) return;
+
+    const voteList = votes || [];
+    const counts: Record<string, number> = {};
+    for (const c of candidates) {
+      counts[c.id] = 0;
+    }
+
+    for (const v of voteList) {
+      if (v.president_vote && counts[v.president_vote] !== undefined) {
+        counts[v.president_vote]++;
+      }
+      if (v.vp_vote && counts[v.vp_vote] !== undefined) {
+        counts[v.vp_vote]++;
+      }
+    }
+
+    for (const c of candidates) {
+      const newCount = counts[c.id] || 0;
+      await supabase.from("candidates").update({ vote_count: newCount }).eq("id", c.id);
+    }
+
+    await supabase.from("election_state").update({ total_votes_cast: voteList.length }).eq("id", 1);
+  } catch (err) {
+    console.warn("Error recalculating vote counts in Supabase:", err);
+  }
+}
+
 // ── Submit Vote ──
 
-export function submitVoteBallot(
+export async function submitVoteBallot(
   voter: Voter,
   selections: Record<Position, string>
-): { success: boolean; receiptId?: string; message: string } {
-  const state = getElectionState();
+): Promise<{ success: boolean; receiptId?: string; message: string }> {
+  // Fetch fresh state from Supabase
+  const state = await fetchElectionStateFromSupabase();
   if (state.status !== "OPEN") {
     return {
       success: false,
       message: "Voting is not currently open. Please wait for the official voting period.",
     };
   }
+
+  // Check if voter has already voted in Supabase
+  try {
+    const { data: voterDb } = await supabase
+      .from("voters")
+      .select("has_voted")
+      .eq("roll_number", voter.rollNumber)
+      .maybeSingle();
+
+    if (voterDb && voterDb.has_voted) {
+      return {
+        success: false,
+        message: "You have already cast your ballot in this election.",
+      };
+    }
+  } catch {}
 
   if (voter.hasVoted) {
     return {
@@ -111,31 +306,57 @@ export function submitVoteBallot(
   const receiptId = generateVoteReceiptId();
   const timestamp = new Date().toISOString();
 
-  const newRecord: VoteRecord = {
-    receiptId,
-    timestamp,
-    selections,
-    voterRoll: voter.rollNumber,
-  };
+  const presVote = selections["President"] || (selections as any)["president"] || "";
+  const vpVote = selections["Vice President"] || (selections as any)["vice_president"] || "";
 
-  if (typeof window !== "undefined") {
-    try {
-      // Save vote record
+  try {
+    // 1. Insert vote into Supabase votes table
+    const { error: vErr } = await supabase.from("votes").insert([
+      {
+        receipt_id: receiptId,
+        voter_roll: voter.rollNumber,
+        president_vote: presVote,
+        vp_vote: vpVote,
+        created_at: timestamp,
+      },
+    ]);
+
+    if (vErr) {
+      console.error("Supabase vote insert error:", vErr);
+      return { success: false, message: "Failed to record vote in central database. Please try again." };
+    }
+
+    // 2. Update voter in Supabase voters table
+    await supabase
+      .from("voters")
+      .update({
+        has_voted: true,
+        vote_receipt_id: receiptId,
+        vote_timestamp: timestamp,
+      })
+      .eq("roll_number", voter.rollNumber);
+
+    // 3. Recalculate candidate vote counts and total_votes_cast in Supabase
+    await recalculateVoteCountsInSupabase();
+
+    // 4. Insert Audit Log
+    addAuditLog(
+      "Vote Cast",
+      `Ballot receipt ${receiptId} generated for roll ${voter.rollNumber}.`,
+      "VOTE"
+    );
+
+    // 5. Update local cache
+    if (typeof window !== "undefined") {
       const votes = getVoteRecords();
-      votes.push(newRecord);
+      votes.push({
+        receiptId,
+        timestamp,
+        selections,
+        voterRoll: voter.rollNumber,
+      });
       localStorage.setItem(VOTES_KEY, JSON.stringify(votes));
 
-      // Update candidate vote counts
-      const candidates = getCandidates();
-      for (const [, candId] of Object.entries(selections)) {
-        const idx = candidates.findIndex((c) => c.id === candId);
-        if (idx !== -1) {
-          candidates[idx].voteCount += 1;
-        }
-      }
-      saveCandidates(candidates);
-
-      // Update voter status
       const voters = getStoredVotersList();
       const voterIdx = voters.findIndex((v) => v.rollNumber === voter.rollNumber);
       if (voterIdx !== -1) {
@@ -144,20 +365,10 @@ export function submitVoteBallot(
         voters[voterIdx].voteTimestamp = timestamp;
         saveStoredVotersList(voters);
       }
-
-      // Update election state
-      updateElectionState({ totalVotesCast: state.totalVotesCast + 1 });
-
-      // Add audit log
-      addAuditLog(
-        "Vote Cast",
-        `Ballot receipt ${receiptId} generated for roll ${voter.rollNumber}.`,
-        "VOTE"
-      );
-    } catch (e) {
-      console.error("Failed to store vote:", e);
-      return { success: false, message: "An error occurred while saving your vote. Please try again." };
     }
+  } catch (e) {
+    console.error("Failed to store vote:", e);
+    return { success: false, message: "An error occurred while saving your vote. Please try again." };
   }
 
   return {
@@ -169,113 +380,98 @@ export function submitVoteBallot(
 
 // ── Admin: Edit Vote ──
 
-export function adminEditVote(
+export async function adminEditVote(
   voterRoll: string,
   newSelections: Record<Position, string>,
   adminNote: string
-): { success: boolean; message: string } {
-  if (typeof window === "undefined") return { success: false, message: "Server-side not supported." };
+): Promise<{ success: boolean; message: string }> {
+  const presVote = newSelections["President"] || (newSelections as any)["president"] || "";
+  const vpVote = newSelections["Vice President"] || (newSelections as any)["vice_president"] || "";
 
-  const votes = getVoteRecords();
-  const voteIdx = votes.findIndex((v) => v.voterRoll === voterRoll);
+  try {
+    const { data: existingVote } = await supabase
+      .from("votes")
+      .select("*")
+      .eq("voter_roll", voterRoll)
+      .maybeSingle();
 
-  if (voteIdx === -1) {
-    return { success: false, message: "No vote record found for this roll number." };
+    if (!existingVote) {
+      return { success: false, message: "No vote record found for this roll number." };
+    }
+
+    await supabase
+      .from("votes")
+      .update({
+        president_vote: presVote,
+        vp_vote: vpVote,
+      })
+      .eq("voter_roll", voterRoll);
+
+    await recalculateVoteCountsInSupabase();
+
+    addAuditLog(
+      "Vote Edited (Admin)",
+      `Admin modified ballot for roll ${voterRoll}. Note: ${adminNote}`,
+      "EDIT"
+    );
+
+    return { success: true, message: "Vote has been updated successfully." };
+  } catch (err) {
+    console.error("Error editing vote:", err);
+    return { success: false, message: "Error updating vote in database." };
   }
-
-  const oldSelections = votes[voteIdx].selections;
-
-  // Decrement old candidate counts
-  const candidates = getCandidates();
-  for (const [, candId] of Object.entries(oldSelections)) {
-    const idx = candidates.findIndex((c) => c.id === candId);
-    if (idx !== -1) candidates[idx].voteCount = Math.max(0, candidates[idx].voteCount - 1);
-  }
-
-  // Increment new candidate counts
-  for (const [, candId] of Object.entries(newSelections)) {
-    const idx = candidates.findIndex((c) => c.id === candId);
-    if (idx !== -1) candidates[idx].voteCount += 1;
-  }
-
-  saveCandidates(candidates);
-
-  // Update vote record
-  votes[voteIdx].selections = newSelections;
-  localStorage.setItem(VOTES_KEY, JSON.stringify(votes));
-
-  // Audit log
-  addAuditLog(
-    "Vote Edited (Admin)",
-    `Admin modified ballot for roll ${voterRoll}. Note: ${adminNote}`,
-    "EDIT"
-  );
-
-  return { success: true, message: "Vote has been updated successfully." };
 }
 
 // ── Admin: Reset Voter's Vote ──
 
-export function adminResetVoterVote(
+export async function adminResetVoterVote(
   voterRoll: string,
   reason: string
-): { success: boolean; message: string } {
-  if (typeof window === "undefined") return { success: false, message: "Server-side not supported." };
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const { data: voterDb } = await supabase
+      .from("voters")
+      .select("*")
+      .eq("roll_number", voterRoll)
+      .maybeSingle();
 
-  const voters = getStoredVotersList();
-  const voterIdx = voters.findIndex((v) => v.rollNumber === voterRoll);
-
-  if (voterIdx === -1) {
-    return { success: false, message: "Voter not found." };
-  }
-
-  const voter = voters[voterIdx];
-  if (!voter.hasVoted) {
-    return { success: false, message: "This voter has not cast a vote yet." };
-  }
-
-  // Find their vote record
-  const votes = getVoteRecords();
-  const voteIdx = votes.findIndex((v) => v.voterRoll === voterRoll);
-
-  if (voteIdx !== -1) {
-    const ballot = votes[voteIdx];
-    // Decrement candidate vote counts
-    const candidates = getCandidates();
-    for (const [, candId] of Object.entries(ballot.selections)) {
-      const cIdx = candidates.findIndex((c) => c.id === candId);
-      if (cIdx !== -1) {
-        candidates[cIdx].voteCount = Math.max(0, candidates[cIdx].voteCount - 1);
-      }
+    if (!voterDb) {
+      return { success: false, message: "Voter not found in registry." };
     }
-    saveCandidates(candidates);
 
-    // Remove vote record
-    votes.splice(voteIdx, 1);
-    localStorage.setItem(VOTES_KEY, JSON.stringify(votes));
+    if (!voterDb.has_voted) {
+      return { success: false, message: "This voter has not cast a vote yet." };
+    }
+
+    // 1. Delete vote record from votes table
+    await supabase.from("votes").delete().eq("voter_roll", voterRoll);
+
+    // 2. Reset voter status in voters table
+    await supabase
+      .from("voters")
+      .update({
+        has_voted: false,
+        vote_receipt_id: null,
+        vote_timestamp: null,
+      })
+      .eq("roll_number", voterRoll);
+
+    // 3. Recalculate counts
+    await recalculateVoteCountsInSupabase();
+
+    // 4. Insert audit log
+    addAuditLog(
+      "Voter Vote Reset (Admin)",
+      `Admin reset vote for member ${voterDb.name} (${voterRoll}). Reason: ${reason}`,
+      "EDIT"
+    );
+
+    return {
+      success: true,
+      message: `Vote for ${voterDb.name} (${voterRoll}) has been successfully reset.`,
+    };
+  } catch (err) {
+    console.error("Error resetting voter vote:", err);
+    return { success: false, message: "Error resetting vote in database." };
   }
-
-  // Reset voter status
-  voters[voterIdx].hasVoted = false;
-  delete voters[voterIdx].voteReceiptId;
-  delete voters[voterIdx].voteTimestamp;
-  saveStoredVotersList(voters);
-
-  // Update total votes cast count
-  const state = getElectionState();
-  updateElectionState({ totalVotesCast: Math.max(0, state.totalVotesCast - 1) });
-
-  // Audit log
-  addAuditLog(
-    "Voter Vote Reset (Admin)",
-    `Admin reset vote for member ${voter.name} (${voterRoll}). Reason: ${reason}`,
-    "EDIT"
-  );
-
-  return {
-    success: true,
-    message: `Vote for ${voter.name} (${voterRoll}) has been successfully reset.`,
-  };
 }
-
-
