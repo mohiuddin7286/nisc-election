@@ -65,10 +65,37 @@ export function getStoredVotersList(): Voter[] {
   if (typeof window === "undefined") return initialVoters;
   try {
     const raw = localStorage.getItem(VOTERS_LIST_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const storedVoters: Voter[] = JSON.parse(raw);
+      const storedMap = new Map(storedVoters.map((v) => [v.id, v]));
+
+      const mergedList: Voter[] = initialVoters.map((initVoter) => {
+        const existing = storedMap.get(initVoter.id);
+        if (existing) {
+          return {
+            ...initVoter,
+            hasVoted: existing.hasVoted ?? false,
+            voteReceiptId: existing.voteReceiptId,
+            voteTimestamp: existing.voteTimestamp,
+          };
+        }
+        return initVoter;
+      });
+
+      const initIds = new Set(initialVoters.map((v) => v.id));
+      storedVoters.forEach((v) => {
+        if (!initIds.has(v.id)) {
+          mergedList.push(v);
+        }
+      });
+
+      localStorage.setItem(VOTERS_LIST_KEY, JSON.stringify(mergedList));
+      return mergedList;
+    }
   } catch {
     // fallback
   }
+  localStorage.setItem(VOTERS_LIST_KEY, JSON.stringify(initialVoters));
   return initialVoters;
 }
 

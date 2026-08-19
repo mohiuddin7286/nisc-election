@@ -63,8 +63,9 @@ export const initialVoters: Voter[] = [
   { id: "v-057", name: "Anshul", rollNumber: "2510030352", year: "Y25", department: "CSE", state: "Rajasthan", hasVoted: false },
   { id: "v-058", name: "Armaan Reza", rollNumber: "2510030299", year: "Y25", department: "CSE", state: "Uttar Pradesh", hasVoted: false },
   { id: "v-059", name: "Sayak Dara", rollNumber: "2510040014", year: "Y25", department: "ECE", state: "West Bengal", hasVoted: false },
-  { id: "v-060", name: "Binamra Maity", rollNumber: "2510030328", year: "Y25", department: "CSE", state: "West Bengal", hasVoted: false },
+  { id: "v-060", name: "Binamra Maity", rollNumber: "2510030052", year: "Y25", department: "CSE", state: "Odisha", hasVoted: false },
   { id: "v-061", name: "Priyanka Rupnar", rollNumber: "2520030540", year: "Y25", department: "CSE", state: "Maharashtra", hasVoted: false },
+  { id: "v-071", name: "Samrith Jain", rollNumber: "2510250035", year: "Y25", department: "BCA", state: "Rajasthan", hasVoted: false },
 
   // ── Y26 Batch ──
   { id: "v-062", name: "Piyush Kumar", rollNumber: "2610030324", year: "Y26", department: "CSE", state: "Bihar", hasVoted: false },
