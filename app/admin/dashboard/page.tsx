@@ -52,14 +52,7 @@ export default function AdminDashboard() {
   const [copiedRoll, setCopiedRoll] = useState<string | null>(null);
   const [voterFilterText, setVoterFilterText] = useState("");
 
-  // Vote edit
-  const [searchRoll, setSearchRoll] = useState("");
-  const [foundVoter, setFoundVoter] = useState<Voter | null>(null);
-  const [foundVote, setFoundVote] = useState<VoteRecord | null>(null);
-  const [editPres, setEditPres] = useState("");
-  const [editVP, setEditVP] = useState("");
-  const [editNote, setEditNote] = useState("");
-  const [editMsg, setEditMsg] = useState<string | null>(null);
+
 
 
 
@@ -128,40 +121,7 @@ export default function AdminDashboard() {
 
 
 
-  const handleSearchVoter = () => {
-    setEditMsg(null);
-    const voter = voters.find((v) => v.rollNumber === searchRoll.trim());
-    if (!voter) {
-      setFoundVoter(null);
-      setFoundVote(null);
-      setEditMsg("No voter found with this roll number.");
-      return;
-    }
-    setFoundVoter(voter);
-    const vote = voteRecords.find((v) => v.voterRoll === voter.rollNumber);
-    setFoundVote(vote || null);
-    if (vote) {
-      setEditPres(vote.selections["President"] || "");
-      setEditVP(vote.selections["Vice President"] || "");
-    }
-  };
 
-  const handleSaveEdit = async () => {
-    if (!foundVoter || !editPres || !editVP || !editNote.trim()) {
-      setEditMsg("Please fill all fields including an edit note.");
-      return;
-    }
-    const result = await adminEditVote(
-      foundVoter.rollNumber,
-      { President: editPres, "Vice President": editVP } as Record<Position, string>,
-      editNote
-    );
-    setEditMsg(result.message);
-    if (result.success) {
-      await refreshData();
-      setEditNote("");
-    }
-  };
 
   const handleLogout = () => {
     logoutAdmin();
@@ -365,88 +325,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Vote Search & Edit */}
-      <div className="nisc-card p-6">
-        <h2 className="font-heading font-bold text-lg text-nisc-navy mb-4 flex items-center gap-2">
-          <Search className="w-5 h-5 text-nisc-orange" /> Search & Edit Vote
-        </h2>
 
-        <div className="flex gap-2 mb-4">
-          <input
-            type="text"
-            value={searchRoll}
-            onChange={(e) => setSearchRoll(e.target.value)}
-            placeholder="Enter roll number"
-            className="flex-1 px-4 py-2.5 rounded-xl border border-nisc-border bg-white text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-nisc-orange focus:ring-2 focus:ring-nisc-orange/20 text-sm"
-          />
-          <button onClick={handleSearchVoter} className="nisc-btn-primary text-sm px-5">
-            Search
-          </button>
-        </div>
-
-        {editMsg && (
-          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 mb-4">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-700">{editMsg}</p>
-          </div>
-        )}
-
-        {foundVoter && (
-          <div className="space-y-4">
-            <div className="bg-nisc-gray-light rounded-xl p-4">
-              <p className="font-semibold text-nisc-navy text-sm">{foundVoter.name}</p>
-              <p className="text-xs text-nisc-gray">
-                {foundVoter.rollNumber} • {foundVoter.year} • {foundVoter.department} •{" "}
-                {foundVoter.hasVoted ? "Has Voted ✓" : "Has NOT voted"}
-              </p>
-            </div>
-
-            {foundVote && (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-nisc-navy mb-1">President</label>
-                  <select
-                    value={editPres}
-                    onChange={(e) => setEditPres(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-nisc-border bg-white text-sm text-nisc-navy focus:outline-none focus:border-nisc-orange"
-                  >
-                    <option value="">Select...</option>
-                    {candidates.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.codename})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-nisc-navy mb-1">Vice President</label>
-                  <select
-                    value={editVP}
-                    onChange={(e) => setEditVP(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-nisc-border bg-white text-sm text-nisc-navy focus:outline-none focus:border-nisc-orange"
-                  >
-                    <option value="">Select...</option>
-                    {candidates.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.codename})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-nisc-navy mb-1">Edit Reason (required)</label>
-                  <input
-                    type="text"
-                    value={editNote}
-                    onChange={(e) => setEditNote(e.target.value)}
-                    placeholder="Reason for this modification..."
-                    className="w-full px-4 py-2.5 rounded-xl border border-nisc-border bg-white text-sm text-nisc-navy placeholder:text-slate-400 focus:outline-none focus:border-nisc-orange"
-                  />
-                </div>
-                <button onClick={handleSaveEdit} className="nisc-btn-primary text-sm">
-                  Save Changes
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* Voter List */}
       <div className="nisc-card p-6">
