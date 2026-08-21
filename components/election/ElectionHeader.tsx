@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ShieldCheck } from "lucide-react";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -50,6 +50,14 @@ export default function ElectionHeader() {
             Cast Vote
           </Link>
 
+          <Link
+            href="/admin"
+            className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-nisc-navy bg-nisc-gray-light hover:bg-nisc-orange-light hover:text-nisc-orange border border-nisc-border hover:border-nisc-orange/40 rounded-xl transition-all shadow-sm"
+          >
+            <ShieldCheck className="w-4 h-4 text-nisc-orange" />
+            Admin
+          </Link>
+
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             className="md:hidden p-2 rounded-lg text-nisc-gray hover:bg-nisc-gray-light transition-colors"
@@ -79,6 +87,13 @@ export default function ElectionHeader() {
             className="block nisc-btn-primary text-sm text-center mt-2"
           >
             Cast Vote
+          </Link>
+          <Link
+            href="/admin"
+            onClick={() => setMobileOpen(false)}
+            className="block text-center py-2 text-sm font-bold text-nisc-navy bg-nisc-gray-light rounded-lg mt-1"
+          >
+            Admin Portal
           </Link>
         </div>
       )}

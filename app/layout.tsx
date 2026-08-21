@@ -94,14 +94,6 @@ export default function RootLayout({
                   <span className="block text-sm text-nisc-navy">
                     NISC Rulebook
                   </span>
-                  {/* Discreet admin link */}
-                  <Link
-                    href="/admin"
-                    className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-nisc-orange transition-colors mt-2"
-                    title="Admin"
-                  >
-                    AD
-                  </Link>
                 </div>
               </div>
             </div>
